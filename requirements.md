@@ -15,6 +15,8 @@ The CDN will be responsible for fetching content from the origin server and cach
   - If the `Cache-Control` header is set to `no-cache`, we should not cache the content
   - If the `Cache-Control` header is set to `max-age=3600`, we should cache the content for 1 hour
   - If the `Cache-Control` header is NOT set, we will default to NOT caching the content
+- Nodes should 'share' knowledge about pages that exist to be cached
+  - When a node get a request for a page that it does not have cached, it should fetch the page from the origin server and cache it. And then it should notify the other nodes that this page exists.
 
 ## Deployment Plan
 
