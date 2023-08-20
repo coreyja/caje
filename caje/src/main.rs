@@ -1,9 +1,11 @@
-use std::net::SocketAddr;
+use std::{collections::HashMap, net::SocketAddr, sync::Mutex};
 
-use axum::{response::IntoResponse, routing::get, Router};
+use axum::{body::Bytes, response::IntoResponse, Router};
 
-use http::{method, uri::PathAndQuery, HeaderMap, Request};
+use http::{header, method, uri::PathAndQuery, HeaderMap, Method, Request, StatusCode, Uri};
 use miette::{IntoDiagnostic, Result};
+use reqwest::Response;
+use tracing::info;
 
 const PROXY_FROM_DOMAIN: &str = "slow.coreyja.test";
 const PROXY_ORIGIN_DOMAIN: &str = "localhost:3000";
@@ -24,20 +26,14 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn proxy_request<Body>(
+#[axum_macros::debug_handler]
+async fn proxy_request(
+    url: Uri,
     host: axum::extract::Host,
     headers: HeaderMap,
     method: http::Method,
-    request: Request<Body>,
+    bytes: Bytes,
 ) -> Result<impl IntoResponse, String> {
-    let uri = request.uri();
-
-    // let host = request
-    //     .headers()
-    //     .get("host")
-    //     .ok_or("No host header specified")?
-    //     .to_str()
-    //     .map_err(|_| "Could not parse host header")?;
     let split = host.0.split(':').collect::<Vec<_>>();
     let host_name = split[0];
 
@@ -48,12 +44,10 @@ async fn proxy_request<Body>(
         ));
     }
 
-    let path = uri
+    let path = url
         .path_and_query()
         .cloned()
         .unwrap_or_else(|| PathAndQuery::from_static("/"));
-
-    let client = reqwest::Client::new();
 
     let url = http::Uri::builder()
         .scheme("http")
@@ -62,20 +56,104 @@ async fn proxy_request<Body>(
         .path_and_query(path.clone())
         .build()
         .map_err(|_| "Could not build url")?;
-    let response = client
-        .request(method, url.to_string())
-        .headers(headers)
-        .send()
-        .await
-        .map_err(|_| "Request failed")?;
+
+    let response = get_potentially_cached_response(method, url, headers, bytes).await?;
 
     Ok((
         response.status(),
         response.headers().clone(),
-        response
-            .bytes()
-            .await
-            .into_diagnostic()
-            .map_err(|_| "Could not get bytes from header")?,
+        response.into_body(),
     ))
+}
+
+type CacheKey = (Method, Uri);
+
+lazy_static::lazy_static! {
+    static ref CACHE: Mutex<HashMap<CacheKey, http::Response<Bytes>>> = Mutex::new(HashMap::new());
+}
+
+#[tracing::instrument(skip(body))]
+async fn get_potentially_cached_response(
+    method: Method,
+    url: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<http::Response<Bytes>, String> {
+    info!("Requesting: {}", url);
+    {
+        let cache = CACHE.lock().unwrap();
+        let cached_response = cache.get(&(method.clone(), url.clone()));
+
+        if let Some(cached) = cached_response {
+            let mut response = http::Response::builder().status(cached.status());
+            for (key, value) in cached.headers().iter() {
+                response = response.header(key, value);
+            }
+            let response = response
+                .body(cached.body().clone())
+                .map_err(|_| "Could not build response")?;
+            // .headers(response.headers().clone())
+            // .body(response.body().clone())
+            // .map_err(|_| "Could not build response")?;
+            return Ok(response);
+        }
+    }
+
+    let client = reqwest::Client::new();
+    let origin_response = client
+        .request(method.clone(), url.to_string())
+        .headers(headers)
+        .body(body)
+        .send()
+        .await
+        .map_err(|_| "Request failed")?;
+    let origin_status = origin_response.status();
+    let origin_headers = origin_response.headers().clone();
+    let origin_bytes = origin_response
+        .bytes()
+        .await
+        .map_err(|_| "Could not get bytes from body")?;
+
+    // let mut response = http::Response::builder().status(origin_response.status());
+
+    // for (key, value) in origin_response.headers().iter() {
+    //     response = response.header(key, value);
+    // }
+    // let response = response
+    //     .body(origin_bytes)
+    //     .map_err(|_| "Could not build response")?;
+
+    // {
+    //     let mut cache = CACHE.lock().unwrap();
+    //     cache.insert((method, url), response.clone());
+    // }
+    {
+        let response_to_cache = http_response_from_reqwest_response(
+            &origin_status,
+            &origin_headers,
+            origin_bytes.clone(),
+        )
+        .map_err(|_| "Could not build response")?;
+        let mut cache = CACHE.lock().unwrap();
+        cache.insert((method, url), response_to_cache);
+    }
+
+    let response =
+        http_response_from_reqwest_response(&origin_status, &origin_headers, origin_bytes)
+            .map_err(|_| "Could not build response")?;
+    Ok(response)
+}
+
+fn http_response_from_reqwest_response(
+    status: &StatusCode,
+    headers: &HeaderMap,
+    body: Bytes,
+) -> Result<http::Response<Bytes>> {
+    let mut builder = http::Response::builder().status(status);
+
+    for (key, value) in headers.iter() {
+        builder = builder.header(key, value);
+    }
+
+    builder.body(body).into_diagnostic()
 }
