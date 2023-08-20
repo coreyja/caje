@@ -85,16 +85,10 @@ async fn get_potentially_cached_response(
         let cached_response = cache.get(&(method.clone(), url.clone()));
 
         if let Some(cached) = cached_response {
-            let mut response = http::Response::builder().status(cached.status());
-            for (key, value) in cached.headers().iter() {
-                response = response.header(key, value);
-            }
-            let response = response
-                .body(cached.body().clone())
-                .map_err(|_| "Could not build response")?;
-            // .headers(response.headers().clone())
-            // .body(response.body().clone())
-            // .map_err(|_| "Could not build response")?;
+            let response =
+                http_response_from_parts(&cached.status(), cached.headers(), cached.body().clone())
+                    .map_err(|_| "Could not build response")?;
+
             return Ok(response);
         }
     }
@@ -107,6 +101,7 @@ async fn get_potentially_cached_response(
         .send()
         .await
         .map_err(|_| "Request failed")?;
+
     let origin_status = origin_response.status();
     let origin_headers = origin_response.headers().clone();
     let origin_bytes = origin_response
@@ -114,37 +109,20 @@ async fn get_potentially_cached_response(
         .await
         .map_err(|_| "Could not get bytes from body")?;
 
-    // let mut response = http::Response::builder().status(origin_response.status());
-
-    // for (key, value) in origin_response.headers().iter() {
-    //     response = response.header(key, value);
-    // }
-    // let response = response
-    //     .body(origin_bytes)
-    //     .map_err(|_| "Could not build response")?;
-
-    // {
-    //     let mut cache = CACHE.lock().unwrap();
-    //     cache.insert((method, url), response.clone());
-    // }
     {
-        let response_to_cache = http_response_from_reqwest_response(
-            &origin_status,
-            &origin_headers,
-            origin_bytes.clone(),
-        )
-        .map_err(|_| "Could not build response")?;
+        let response_to_cache =
+            http_response_from_parts(&origin_status, &origin_headers, origin_bytes.clone())
+                .map_err(|_| "Could not build response")?;
         let mut cache = CACHE.lock().unwrap();
         cache.insert((method, url), response_to_cache);
     }
 
-    let response =
-        http_response_from_reqwest_response(&origin_status, &origin_headers, origin_bytes)
-            .map_err(|_| "Could not build response")?;
+    let response = http_response_from_parts(&origin_status, &origin_headers, origin_bytes)
+        .map_err(|_| "Could not build response")?;
     Ok(response)
 }
 
-fn http_response_from_reqwest_response(
+fn http_response_from_parts(
     status: &StatusCode,
     headers: &HeaderMap,
     body: Bytes,
