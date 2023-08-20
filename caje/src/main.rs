@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use axum::{response::IntoResponse, routing::get, Router};
 
-use http::Request;
+use http::{method, uri::PathAndQuery, HeaderMap, Request};
 use miette::{IntoDiagnostic, Result};
 
 const PROXY_FROM_DOMAIN: &str = "slow.coreyja.test";
@@ -26,6 +26,8 @@ async fn main() -> Result<()> {
 
 async fn proxy_request<Body>(
     host: axum::extract::Host,
+    headers: HeaderMap,
+    method: http::Method,
     request: Request<Body>,
 ) -> Result<impl IntoResponse, String> {
     let uri = request.uri();
@@ -46,11 +48,23 @@ async fn proxy_request<Body>(
         ));
     }
 
-    let path = uri.path_and_query().map(|pq| pq.path()).unwrap_or("/");
+    let path = uri
+        .path_and_query()
+        .cloned()
+        .unwrap_or_else(|| PathAndQuery::from_static("/"));
 
     let client = reqwest::Client::new();
+
+    let url = http::Uri::builder()
+        .scheme("http")
+        .authority(PROXY_ORIGIN_DOMAIN);
+    let url = url
+        .path_and_query(path.clone())
+        .build()
+        .map_err(|_| "Could not build url")?;
     let response = client
-        .get(format!("http://{PROXY_ORIGIN_DOMAIN}{path}"))
+        .request(method, url.to_string())
+        .headers(headers)
         .send()
         .await
         .map_err(|_| "Request failed")?;
