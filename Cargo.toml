@@ -1,2 +1,2 @@
 [workspace]
-members = ["slow_server", "cdn"]
+members = ["slow_server", "caje"]
