@@ -1,6 +1,11 @@
 use std::net::SocketAddr;
 
-use axum::{routing::*, Router};
+use axum::{
+    http::{header, HeaderMap},
+    response::IntoResponse,
+    routing::*,
+    Router,
+};
 use chrono::Utc;
 use maud::Markup;
 
@@ -55,26 +60,31 @@ fn outer_template(body: Markup) -> Markup {
     }
 }
 
-fn now_template(title: &str) -> maud::Markup {
+fn now_template(title: &str) -> impl IntoResponse {
     let now = Utc::now();
 
-    outer_template(maud::html! {
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CACHE_CONTROL, "max-age=60".parse().unwrap());
+
+    let template = outer_template(maud::html! {
         h1 class="text-6xl" { (title) }
         p class="text-4xl" { (now) }
 
         a class="text-blue-400 pt-16 text-xl" href="/" { "Go back home" }
-    })
+    });
+
+    (headers, template)
 }
 
 // handler that responds after 5 seconds
-async fn slow() -> impl axum::response::IntoResponse {
+async fn slow() -> impl IntoResponse {
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     now_template("Slow")
 }
 
 // handler that responds after 1 second
-async fn fast() -> impl axum::response::IntoResponse {
+async fn fast() -> impl IntoResponse {
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     now_template("Fast")

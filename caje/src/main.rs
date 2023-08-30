@@ -2,9 +2,8 @@ use std::{collections::HashMap, net::SocketAddr, sync::Mutex};
 
 use axum::{body::Bytes, response::IntoResponse, Router};
 
-use http::{header, method, uri::PathAndQuery, HeaderMap, Method, Request, StatusCode, Uri};
+use http::{uri::PathAndQuery, HeaderMap, Method, StatusCode, Uri};
 use miette::{IntoDiagnostic, Result};
-use reqwest::Response;
 use tracing::info;
 
 const PROXY_FROM_DOMAIN: &str = "slow.coreyja.test";
@@ -69,7 +68,12 @@ async fn proxy_request(
 type CacheKey = (Method, Uri);
 
 lazy_static::lazy_static! {
-    static ref CACHE: Mutex<HashMap<CacheKey, http::Response<Bytes>>> = Mutex::new(HashMap::new());
+    static ref CACHE: Mutex<HashMap<CacheKey, CachedResponse>> = Mutex::new(HashMap::new());
+}
+
+struct CachedResponse {
+    response: http::Response<Bytes>,
+    cached_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[tracing::instrument(skip(body))]
@@ -85,9 +89,12 @@ async fn get_potentially_cached_response(
         let cached_response = cache.get(&(method.clone(), url.clone()));
 
         if let Some(cached) = cached_response {
-            let response =
-                http_response_from_parts(&cached.status(), cached.headers(), cached.body().clone())
-                    .map_err(|_| "Could not build response")?;
+            let response = http_response_from_parts(
+                &cached.response.status(),
+                cached.response.headers(),
+                cached.response.body().clone(),
+            )
+            .map_err(|_| "Could not build response")?;
 
             return Ok(response);
         }
@@ -113,6 +120,11 @@ async fn get_potentially_cached_response(
         let response_to_cache =
             http_response_from_parts(&origin_status, &origin_headers, origin_bytes.clone())
                 .map_err(|_| "Could not build response")?;
+        let now = chrono::Utc::now();
+        let response_to_cache = CachedResponse {
+            response: response_to_cache,
+            cached_at: now,
+        };
         let mut cache = CACHE.lock().unwrap();
         cache.insert((method, url), response_to_cache);
     }
