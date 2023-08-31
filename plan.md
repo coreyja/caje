@@ -1,4 +1,6 @@
-# What did I do last time?
+# Plan
+
+## What did I do last time?
 
 On this stream we got started looking at the Cache-Controler headers. Previously we cached the response no matter what.
 But now we can use the Cache-Control header to determine if we should cache the response or not.
@@ -7,7 +9,7 @@ We opted to use the `http-cache-semantics` crate to parse the Cache-Control head
 We learned that Chrome was sending a `Max-Age: 0` header which was forcing our CDN to always refetch from the Origin.
 NOTE: Use Firefox for future testing!
 
-# Next Steps
+## Next Steps
 
 - [ ] Cache to the FileSystem instead of holding everything in memory
 - [ ] Add a `/admin/cache` endpoint to see what is in the cache
