@@ -7,6 +7,7 @@ use axum::{
     RequestExt, Router,
 };
 
+use cacache::Metadata;
 use http::{uri::PathAndQuery, HeaderMap, Method, Request, Response, StatusCode, Uri, Version};
 use http_cache_semantics::{BeforeRequest, CachePolicy};
 use miette::{miette, Context, IntoDiagnostic, Result};
@@ -20,7 +21,9 @@ const PROXY_ORIGIN_DOMAIN: &str = "localhost:3000";
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let app = Router::new().fallback(proxy_request);
+    let app = Router::new()
+        .route("/_caje/list", axum::routing::get(admin_list_entries))
+        .fallback(proxy_request);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3001));
     tracing::debug!("listening on {}", addr);
@@ -30,6 +33,22 @@ async fn main() -> Result<()> {
         .into_diagnostic()?;
 
     Ok(())
+}
+
+async fn admin_list_entries() -> Result<impl IntoResponse, String> {
+    let entries: Result<Vec<Metadata>, _> =
+        tokio::task::spawn_blocking(move || cacache::list_sync(CACHE_DIR).collect())
+            .await
+            .into_diagnostic()
+            .map_err(|e| e.to_string())?;
+    let entries = entries.into_diagnostic().map_err(|e| e.to_string())?;
+
+    let entries = entries
+        .into_iter()
+        .map(|entry| entry.key)
+        .collect::<Vec<_>>();
+
+    Ok((StatusCode::OK, entries.join("\n")))
 }
 
 // #[axum_macros::debug_handler]
