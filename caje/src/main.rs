@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, time::SystemTime};
+use std::{fs::OpenOptions, net::SocketAddr, time::SystemTime};
 
 use axum::{
     body::{Body, Bytes},
@@ -20,6 +20,26 @@ const PROXY_ORIGIN_DOMAIN: &str = "localhost:3000";
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
+
+    let database_url: String = std::env::var("DATABASE_URL").or_else(|_| -> Result<String> {
+        let path = std::env::var("DATABASE_PATH");
+
+        Ok(if let Ok(p) = &path {
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open(p)
+                .into_diagnostic()?;
+
+            format!("sqlite:{}", p)
+        } else {
+            "sqlite::memory:".to_string()
+        })
+    })?;
+    let db_pool = sqlx::sqlite::SqlitePool::connect(&database_url)
+        .await
+        .into_diagnostic()?;
+    sqlx::migrate!().run(&db_pool).await.into_diagnostic()?;
 
     let app = Router::new()
         .route("/_caje/list", axum::routing::get(admin_list_entries))

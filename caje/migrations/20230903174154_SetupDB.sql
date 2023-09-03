@@ -1,0 +1,2 @@
+-- Add migration script here
+-- EMPTY MIGRATION ON PURPOSE TO SETUP SQLX
