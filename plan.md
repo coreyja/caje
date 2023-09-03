@@ -11,7 +11,7 @@ NOTE: Use Firefox for future testing!
 
 ## Next Steps
 
-- [ ] Cache to the FileSystem instead of holding everything in memory
+- [x] Cache to the FileSystem instead of holding everything in memory
 - [ ] Add a `/admin/cache` endpoint to see what is in the cache
   - This will be important for debugging, especially when we get to Multinode
 - [ ] Add a SQLite DB to store the cache metadata

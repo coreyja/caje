@@ -21,3 +21,9 @@ axum-macros = "0.3.8"
 chrono = "0.4.28"
 http-cache-semantics = "1.0.1"
 hyper = "0.14.27"
+cacache = { version = "11.6.0", features = [
+  "tokio-runtime",
+  "mmap",
+], default-features = false }
+http-serde = "1.1.3"
+postcard = { version = "1.0.7", features = ["use-std"] }

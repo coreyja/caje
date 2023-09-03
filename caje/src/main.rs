@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Mutex, time::SystemTime};
+use std::{net::SocketAddr, time::SystemTime};
 
 use axum::{
     body::{Body, Bytes},
@@ -7,9 +7,10 @@ use axum::{
     RequestExt, Router,
 };
 
-use http::{uri::PathAndQuery, HeaderMap, Method, Request, StatusCode, Uri};
+use http::{uri::PathAndQuery, HeaderMap, Method, Request, Response, StatusCode, Uri, Version};
 use http_cache_semantics::{BeforeRequest, CachePolicy};
-use miette::{IntoDiagnostic, Result};
+use miette::{miette, Context, IntoDiagnostic, Result};
+use serde::{Deserialize, Serialize};
 use tracing::info;
 
 const PROXY_FROM_DOMAIN: &str = "slow.coreyja.test";
@@ -47,7 +48,9 @@ async fn proxy_request(mut request: Request<Body>) -> Result<impl IntoResponse, 
         ));
     }
 
-    let response = get_potentially_cached_response(request).await?;
+    let response = get_potentially_cached_response(request)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok((
         response.status(),
@@ -56,44 +59,72 @@ async fn proxy_request(mut request: Request<Body>) -> Result<impl IntoResponse, 
     ))
 }
 
-type CacheKey = (Method, Uri);
+const CACHE_DIR: &str = "./tmp/cache";
 
-lazy_static::lazy_static! {
-    static ref CACHE: Mutex<HashMap<CacheKey, CachedResponse>> = Mutex::new(HashMap::new());
+#[derive(Deserialize, Serialize)]
+struct InnerCachedRequest {
+    #[serde(with = "http_serde::method")]
+    pub method: Method,
+
+    #[serde(with = "http_serde::uri")]
+    pub uri: Uri,
+
+    #[serde(with = "http_serde::version")]
+    pub version: Version,
+
+    #[serde(with = "http_serde::header_map")]
+    pub headers: HeaderMap,
+
+    body: Vec<u8>,
 }
 
+#[derive(Deserialize, Serialize, Clone)]
+struct InnerCachedResponse {
+    #[serde(with = "http_serde::status_code")]
+    pub status_code: StatusCode,
+
+    #[serde(with = "http_serde::version")]
+    pub version: Version,
+
+    #[serde(with = "http_serde::header_map")]
+    pub headers: HeaderMap,
+
+    body: Vec<u8>,
+}
+
+#[derive(Deserialize, Serialize)]
 struct CachedResponse {
-    request: Request<Bytes>,
-    response: http::Response<Bytes>,
+    request: InnerCachedRequest,
+    response: InnerCachedResponse,
     cached_at: SystemTime,
 }
 
 #[tracing::instrument(skip_all)]
-async fn get_potentially_cached_response(
-    request: Request<Body>,
-) -> Result<http::Response<Bytes>, String> {
+async fn get_potentially_cached_response(request: Request<Body>) -> Result<http::Response<Bytes>> {
     let method = request.method().clone();
     let url = request.uri().clone();
     info!("Requesting: {}", url);
 
     {
-        let cache = CACHE.lock().unwrap();
-        let cached_response = cache.get(&(method.clone(), url.clone()));
+        // let cache = CACHE.lock().unwrap();
+        // let cached_response = cache.get(&(method.clone(), url.clone()));
+        let cache_key = format!("{}@{}", method, url);
+        let cached_response = cacache::read(CACHE_DIR, cache_key)
+            .await
+            .context("Could not write to cache");
 
-        if let Some(cached) = cached_response {
-            let response = http_response_from_parts(
-                &cached.response.status(),
-                cached.response.headers(),
-                cached.response.body().clone(),
-            )
-            .map_err(|_| "Could not build response")?;
+        if let Ok(cached) = cached_response {
+            let cached = postcard::from_bytes::<CachedResponse>(&cached)
+                .map_err(|_| miette!("Could not deserialize cached response"))?;
 
-            let policy = CachePolicy::new_options(
-                &cached.request,
-                &response,
-                cached.cached_at,
-                Default::default(),
-            );
+            let response = http_response_from_parts(cached.response)
+                .map_err(|_| miette!("Could not build response"))?;
+
+            let request = http_request_from_parts(cached.request)
+                .map_err(|_| miette!("Could not build request"))?;
+
+            let policy =
+                CachePolicy::new_options(&request, &response, cached.cached_at, Default::default());
             dbg!(&policy);
             let can_cache = policy.before_request(&request, SystemTime::now());
 
@@ -119,12 +150,12 @@ async fn get_potentially_cached_response(
         .authority(PROXY_ORIGIN_DOMAIN)
         .path_and_query(path.clone())
         .build()
-        .map_err(|_| "Could not build url")?;
+        .map_err(|_| miette!("Could not build url"))?;
 
     let headers = request.headers().clone();
     let bytes = hyper::body::to_bytes(request.into_body())
         .await
-        .map_err(|_| "Could not get bytes from body")?;
+        .map_err(|_| miette!("Could not get bytes from body"))?;
     let client = reqwest::Client::new();
     let origin_response = client
         .request(method.clone(), proxy_url.to_string())
@@ -132,19 +163,25 @@ async fn get_potentially_cached_response(
         .body(bytes.clone())
         .send()
         .await
-        .map_err(|_| "Request failed")?;
+        .map_err(|_| miette!("Request failed"))?;
 
     let origin_status = origin_response.status();
     let origin_headers = origin_response.headers().clone();
+    let origin_version = origin_response.version();
     let origin_bytes = origin_response
         .bytes()
         .await
-        .map_err(|_| "Could not get bytes from body")?;
+        .map_err(|_| miette!("Could not get bytes from body"))?;
 
+    let parts = InnerCachedResponse {
+        status_code: origin_status,
+        headers: origin_headers.clone(),
+        body: origin_bytes.into(),
+        version: origin_version,
+    };
     {
-        let response_to_cache =
-            http_response_from_parts(&origin_status, &origin_headers, origin_bytes.clone())
-                .map_err(|_| "Could not build response")?;
+        let response_to_cache = http_response_from_parts(parts.clone())
+            .map_err(|_| miette!("Could not build response"))?;
         let mut request_to_cache = Request::builder().method(method.clone()).uri(url.clone());
 
         for (key, value) in headers {
@@ -155,31 +192,104 @@ async fn get_potentially_cached_response(
 
         let request_to_cache = request_to_cache
             .body(bytes)
-            .map_err(|_| "Could not build request")?;
+            .map_err(|_| miette!("Could not build request"))?;
+
         let response_to_cache = CachedResponse {
-            request: request_to_cache,
-            response: response_to_cache,
+            request: request_to_cache.into_inner_cached_request()?,
+            response: response_to_cache.into_inner_cached_response()?,
             cached_at: SystemTime::now(),
         };
-        let mut cache = CACHE.lock().unwrap();
-        cache.insert((method, url.clone()), response_to_cache);
+
+        let cache_key = format!("{}@{}", method, url);
+        cacache::write(
+            CACHE_DIR,
+            cache_key,
+            postcard::to_allocvec(&response_to_cache).into_diagnostic()?,
+        )
+        .await
+        .context("Could not write to cache")?;
     }
 
-    let response = http_response_from_parts(&origin_status, &origin_headers, origin_bytes)
-        .map_err(|_| "Could not build response")?;
+    let response =
+        http_response_from_parts(parts).map_err(|_| miette::miette!("Could not build response"))?;
     Ok(response)
 }
 
-fn http_response_from_parts(
-    status: &StatusCode,
-    headers: &HeaderMap,
-    body: Bytes,
-) -> Result<http::Response<Bytes>> {
-    let mut builder = http::Response::builder().status(status);
+fn http_response_from_parts(parts: InnerCachedResponse) -> Result<http::Response<Bytes>> {
+    let InnerCachedResponse {
+        status_code,
+        headers,
+        body,
+        version,
+    } = parts;
+
+    let mut builder = http::Response::builder()
+        .status(status_code)
+        .version(version);
 
     for (key, value) in headers.iter() {
         builder = builder.header(key, value);
     }
 
+    let body: Bytes = body.into();
+
     builder.body(body).into_diagnostic()
+}
+
+fn http_request_from_parts(parts: InnerCachedRequest) -> Result<http::Request<Bytes>> {
+    let InnerCachedRequest {
+        method,
+        uri,
+        version,
+        headers,
+        body,
+    } = parts;
+
+    let mut builder = http::Request::builder()
+        .method(method)
+        .uri(uri)
+        .version(version);
+
+    for (key, value) in headers.iter() {
+        builder = builder.header(key, value);
+    }
+
+    let body: Bytes = body.into();
+
+    builder.body(body).into_diagnostic()
+}
+
+trait IntoInnerCachedRequest {
+    fn into_inner_cached_request(self) -> Result<InnerCachedRequest>;
+}
+
+impl IntoInnerCachedRequest for Request<Bytes> {
+    fn into_inner_cached_request(self) -> Result<InnerCachedRequest> {
+        let (parts, body) = self.into_parts();
+
+        Ok(InnerCachedRequest {
+            method: parts.method,
+            uri: parts.uri,
+            version: parts.version,
+            headers: parts.headers,
+            body: body.to_vec(),
+        })
+    }
+}
+
+trait IntoInnerCachedResponse {
+    fn into_inner_cached_response(self) -> Result<InnerCachedResponse>;
+}
+
+impl IntoInnerCachedResponse for Response<Bytes> {
+    fn into_inner_cached_response(self) -> Result<InnerCachedResponse> {
+        let (parts, body) = self.into_parts();
+
+        Ok(InnerCachedResponse {
+            status_code: parts.status,
+            version: parts.version,
+            headers: parts.headers,
+            body: body.to_vec(),
+        })
+    }
 }
