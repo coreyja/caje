@@ -198,21 +198,21 @@ async fn get_potentially_cached_response(request: Request<Body>) -> Result<http:
         body: origin_bytes.into(),
         version: origin_version,
     };
-    {
-        let response_to_cache = http_response_from_parts(parts.clone())
-            .map_err(|_| miette!("Could not build response"))?;
-        let mut request_to_cache = Request::builder().method(method.clone()).uri(url.clone());
-
-        for (key, value) in headers {
-            if let Some(key) = key {
-                request_to_cache = request_to_cache.header(key, value);
-            }
+    let response_to_cache =
+        http_response_from_parts(parts.clone()).map_err(|_| miette!("Could not build response"))?;
+    let mut request_to_cache = Request::builder().method(method.clone()).uri(url.clone());
+    for (key, value) in headers {
+        if let Some(key) = key {
+            request_to_cache = request_to_cache.header(key, value);
         }
+    }
 
-        let request_to_cache = request_to_cache
-            .body(bytes)
-            .map_err(|_| miette!("Could not build request"))?;
+    let request_to_cache = request_to_cache
+        .body(bytes)
+        .map_err(|_| miette!("Could not build request"))?;
 
+    let policy = CachePolicy::new(&request_to_cache, &response_to_cache);
+    if policy.is_storable() && !policy.time_to_live(SystemTime::now()).is_zero() {
         let response_to_cache = CachedResponse {
             request: request_to_cache.into_inner_cached_request()?,
             response: response_to_cache.into_inner_cached_response()?,
