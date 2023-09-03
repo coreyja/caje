@@ -212,6 +212,7 @@ async fn get_potentially_cached_response(request: Request<Body>) -> Result<http:
 
     let response =
         http_response_from_parts(parts).map_err(|_| miette::miette!("Could not build response"))?;
+
     Ok(response)
 }
 
