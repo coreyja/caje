@@ -2,7 +2,7 @@ use std::{fs::OpenOptions, net::SocketAddr, time::SystemTime};
 
 use axum::{
     body::{Body, Bytes},
-    extract::Host,
+    extract::{Host, State},
     response::IntoResponse,
     RequestExt, Router,
 };
@@ -12,6 +12,7 @@ use http::{uri::PathAndQuery, HeaderMap, Method, Request, Response, StatusCode, 
 use http_cache_semantics::{BeforeRequest, CachePolicy};
 use miette::{miette, Context, IntoDiagnostic, Result};
 use serde::{Deserialize, Serialize};
+use sqlx::SqlitePool;
 use tracing::info;
 
 const PROXY_FROM_DOMAIN: &str = "slow.coreyja.test";
@@ -43,7 +44,8 @@ async fn main() -> Result<()> {
 
     let app = Router::new()
         .route("/_caje/list", axum::routing::get(admin_list_entries))
-        .fallback(proxy_request);
+        .fallback(proxy_request)
+        .with_state(db_pool);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3001));
     tracing::debug!("listening on {}", addr);
@@ -72,7 +74,10 @@ async fn admin_list_entries() -> Result<impl IntoResponse, String> {
 }
 
 // #[axum_macros::debug_handler]
-async fn proxy_request(mut request: Request<Body>) -> Result<impl IntoResponse, String> {
+async fn proxy_request(
+    State(db_pool): State<SqlitePool>,
+    mut request: Request<Body>,
+) -> Result<impl IntoResponse, String> {
     let host: Host = request
         .extract_parts()
         .await
@@ -87,7 +92,7 @@ async fn proxy_request(mut request: Request<Body>) -> Result<impl IntoResponse, 
         ));
     }
 
-    let response = get_potentially_cached_response(request)
+    let response = get_potentially_cached_response(request, db_pool)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -139,7 +144,10 @@ struct CachedResponse {
 }
 
 #[tracing::instrument(skip_all)]
-async fn get_potentially_cached_response(request: Request<Body>) -> Result<http::Response<Bytes>> {
+async fn get_potentially_cached_response(
+    request: Request<Body>,
+    db_pool: SqlitePool,
+) -> Result<http::Response<Bytes>> {
     let method = request.method().clone();
     let url = request.uri().clone();
     info!("Requesting: {}", url);
@@ -247,6 +255,12 @@ async fn get_potentially_cached_response(request: Request<Body>) -> Result<http:
         )
         .await
         .context("Could not write to cache")?;
+        let method = method.to_string();
+        let url = url.to_string();
+        sqlx::query!("INSERT INTO Pages (method, url) VALUES (?, ?)", method, url)
+            .execute(&db_pool)
+            .await
+            .into_diagnostic()?;
     }
 
     let response =
