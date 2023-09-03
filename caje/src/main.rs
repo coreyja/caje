@@ -257,6 +257,7 @@ async fn get_potentially_cached_response(
         .context("Could not write to cache")?;
         let method = method.to_string();
         let url = url.to_string();
+
         sqlx::query!("INSERT INTO Pages (method, url) VALUES (?, ?)", method, url)
             .execute(&db_pool)
             .await
