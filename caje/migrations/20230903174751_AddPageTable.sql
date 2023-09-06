@@ -1,5 +1,5 @@
 -- Add migration script here
-CREATE TABle
+CREATE TABLE
   Pages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     method TEXT NOT NULL,
