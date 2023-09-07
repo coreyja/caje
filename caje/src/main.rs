@@ -60,6 +60,10 @@ async fn main() -> Result<()> {
 async fn admin_list_entries(
     State(db_pool): State<SqlitePool>,
 ) -> Result<impl IntoResponse, String> {
+    tokio::fs::create_dir_all(CACHE_DIR)
+        .await
+        .into_diagnostic()
+        .map_err(|e| e.to_string())?;
     let entries: Result<Vec<Metadata>, _> =
         tokio::task::spawn_blocking(move || cacache::list_sync(CACHE_DIR).collect())
             .await
