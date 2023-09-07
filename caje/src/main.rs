@@ -57,7 +57,9 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn admin_list_entries() -> Result<impl IntoResponse, String> {
+async fn admin_list_entries(
+    State(db_pool): State<SqlitePool>,
+) -> Result<impl IntoResponse, String> {
     let entries: Result<Vec<Metadata>, _> =
         tokio::task::spawn_blocking(move || cacache::list_sync(CACHE_DIR).collect())
             .await
@@ -70,7 +72,24 @@ async fn admin_list_entries() -> Result<impl IntoResponse, String> {
         .map(|entry| entry.key)
         .collect::<Vec<_>>();
 
-    Ok((StatusCode::OK, entries.join("\n")))
+    let pages = sqlx::query!("SELECT * FROM Pages")
+        .fetch_all(&db_pool)
+        .await
+        .into_diagnostic()
+        .map_err(|e| e.to_string())?;
+
+    let pages = pages
+        .into_iter()
+        .map(|page| format!("{} {}", page.method, page.url))
+        .collect::<Vec<_>>();
+
+    let resp = format!(
+        "Entries:\n{}\n\nPages:{}",
+        entries.join("\n"),
+        pages.join("\n")
+    );
+
+    Ok((StatusCode::OK, resp))
 }
 
 // #[axum_macros::debug_handler]
