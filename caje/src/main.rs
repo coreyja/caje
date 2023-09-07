@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::info;
 
-const PROXY_FROM_DOMAIN: &str = "slow.coreyja.test";
-const PROXY_ORIGIN_DOMAIN: &str = "localhost:3000";
+const PROXY_FROM_DOMAIN: &str = "slow.coreyja.com";
+const PROXY_ORIGIN_DOMAIN: &str = "slow-server.fly.dev";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -193,7 +193,7 @@ async fn get_potentially_cached_response(
         .unwrap_or_else(|| PathAndQuery::from_static("/"));
 
     let proxy_url = http::Uri::builder()
-        .scheme("http")
+        .scheme("https")
         .authority(PROXY_ORIGIN_DOMAIN)
         .path_and_query(path.clone())
         .build()
