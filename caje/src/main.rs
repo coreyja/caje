@@ -172,7 +172,6 @@ async fn get_potentially_cached_response(
 
             let policy =
                 CachePolicy::new_options(&request, &response, cached.cached_at, Default::default());
-            dbg!(&policy);
             let can_cache = policy.before_request(&request, SystemTime::now());
 
             match can_cache {
