@@ -21,4 +21,4 @@ source = "caje_data"
 destination = "/data"
 
 [env]
-DATABASE_PATH = "/data/caje.db"
+DATABASE_PATH = "/litefs/caje.db"
