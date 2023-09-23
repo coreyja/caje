@@ -2,7 +2,7 @@
 
 ## What did I do last time?
 
-In our Forth stream we got everything deployed to Fly.io
+In our Fourth stream we got everything deployed to Fly.io
 
 We started by deploying `slow_server` to Paris.
 We then depolyed `caje` to New Jersey and London, and have it proxying to the `slow_server` in Paris.
@@ -20,6 +20,8 @@ We currently blow up if the replicas try to write to the DB, fixing this is up n
 - [ ] Move the cache population to a seperate process that runs in the background
 - [ ] Move some hard coded proxy information to config file
 - [ ] Allow proxying to multiple origins
+- [ ] Write a good Readme.md
+- [ ] `_caje/list` should return the TTL of pages in the cache
 
 ## History
 
