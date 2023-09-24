@@ -2,7 +2,7 @@ use std::{fs::OpenOptions, net::SocketAddr, time::SystemTime};
 
 use axum::{
     body::{Body, Bytes},
-    extract::{Host, State},
+    extract::{FromRef, Host, State},
     response::IntoResponse,
     RequestExt, Router,
 };
@@ -18,14 +18,25 @@ use tracing::info;
 const PROXY_FROM_DOMAIN: &str = "slow.coreyja.com";
 const PROXY_ORIGIN_DOMAIN: &str = "slow-server.fly.dev";
 
+#[derive(Debug, Clone)]
+struct AppState {
+    db_pool: SqlitePool,
+    database_path: Option<String>,
+}
+
+impl FromRef<AppState> for SqlitePool {
+    fn from_ref(state: &AppState) -> Self {
+        state.db_pool.clone()
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let database_url: String = std::env::var("DATABASE_URL").or_else(|_| -> Result<String> {
-        let path = std::env::var("DATABASE_PATH");
-
-        Ok(if let Ok(p) = &path {
+    let database_path = std::env::var("DATABASE_PATH");
+    let database_url: String = {
+        if let Ok(p) = &database_path {
             OpenOptions::new()
                 .write(true)
                 .create(true)
@@ -35,17 +46,25 @@ async fn main() -> Result<()> {
             format!("sqlite:{}", p)
         } else {
             "sqlite::memory:".to_string()
-        })
-    })?;
+        }
+    };
+
     let db_pool = sqlx::sqlite::SqlitePool::connect(&database_url)
         .await
         .into_diagnostic()?;
+
     sqlx::migrate!().run(&db_pool).await.into_diagnostic()?;
+
+    let database_path = database_path.ok();
+    let app_state = AppState {
+        db_pool: db_pool.clone(),
+        database_path,
+    };
 
     let app = Router::new()
         .route("/_caje/list", axum::routing::get(admin_list_entries))
         .fallback(proxy_request)
-        .with_state(db_pool);
+        .with_state(app_state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3001));
     tracing::debug!("listening on {}", addr);
@@ -94,7 +113,7 @@ async fn admin_list_entries(
 
 // #[axum_macros::debug_handler]
 async fn proxy_request(
-    State(db_pool): State<SqlitePool>,
+    State(app_state): State<AppState>,
     mut request: Request<Body>,
 ) -> Result<impl IntoResponse, String> {
     let host: Host = request
@@ -111,7 +130,7 @@ async fn proxy_request(
         ));
     }
 
-    let response = get_potentially_cached_response(request, db_pool)
+    let response = get_potentially_cached_response(request, app_state)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -165,15 +184,15 @@ struct CachedResponse {
 #[tracing::instrument(skip_all)]
 async fn get_potentially_cached_response(
     request: Request<Body>,
-    db_pool: SqlitePool,
+    app_state: AppState,
 ) -> Result<http::Response<Bytes>> {
+    let db_pool = app_state.db_pool;
+
     let method = request.method().clone();
     let url = request.uri().clone();
     info!("Requesting: {}", url);
 
     {
-        // let cache = CACHE.lock().unwrap();
-        // let cached_response = cache.get(&(method.clone(), url.clone()));
         let cache_key = format!("{}@{}", method, url);
         let cached_response = cacache::read(CACHE_DIR, cache_key)
             .await
@@ -277,10 +296,16 @@ async fn get_potentially_cached_response(
         let method = method.to_string();
         let url = url.to_string();
 
+        if let Some(database_path) = &app_state.database_path {
+            litefs_rs::halt(&database_path).into_diagnostic()?;
+        }
         sqlx::query!("INSERT INTO Pages (method, url) VALUES (?, ?)", method, url)
             .execute(&db_pool)
             .await
             .into_diagnostic()?;
+        if let Some(database_path) = &app_state.database_path {
+            litefs_rs::unhalt(&database_path).into_diagnostic()?;
+        }
     }
 
     let response =

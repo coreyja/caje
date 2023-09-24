@@ -1,2 +1,2 @@
 [workspace]
-members = ["slow_server", "caje"]
+members = ["slow_server", "caje", "litefs-rs"]
