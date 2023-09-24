@@ -2,13 +2,19 @@
 
 ## What did I do last time?
 
-In our Fourth stream we got everything deployed to Fly.io
+### Fifth Stream
 
-We started by deploying `slow_server` to Paris.
-We then depolyed `caje` to New Jersey and London, and have it proxying to the `slow_server` in Paris.
+We tried to implement the LiteFS HALT mechanism. We used <https://github.com/superfly/litefs-go/blob/main/litefs.go> as our
+reference implementation.
 
-We got LiteFS working for `caje` so that the replicas can read the SQLite and the primary can write to it.
-We currently blow up if the replicas try to write to the DB, fixing this is up next!
+We got the code in a spot where we _expected_ it to work, but haven't succesfully gotten it working in Fly (or tried locally).
+
+We ~are currently~ WERE getting an `errno: 38` which we believe means `ENOSYS` or `Function not implemented`. Which is _weird_ cause Fly.io makes LiteFS so it should work on their platform. But as I type this it might be an OS thing, but also strange debain wouldn't support it.
+
+This might have been fixed by changing the lock cmd to `FcntlCmd::SetLockWait`. BUTT this doesn't seem like its actually making the lock correctly. Or maybe litefs isn't reading it correctly?
+
+We are still getting this error from the replica: `error returned from database: (code: 1544) attempt to write a readonly database`
+The Primary doesnt have this issue since it doesn't _need_ HALTing to work to write to the DB
 
 ## Next Steps
 
@@ -20,8 +26,9 @@ We currently blow up if the replicas try to write to the DB, fixing this is up n
 - [ ] Move the cache population to a seperate process that runs in the background
 - [ ] Move some hard coded proxy information to config file
 - [ ] Allow proxying to multiple origins
-- [ ] Write a good Readme.md
+- [ ] Write an awesome Readme.md
 - [ ] `_caje/list` should return the TTL of pages in the cache
+- [ ] Move the cache dir to somewhere persisted in the Fly.io VM
 
 ## History
 
@@ -47,3 +54,13 @@ NOTE: Use Firefox for future testing!
   We moved the cache from memory to the File System. To do this we needed to serialize the objects and be able to deserialize them. We went with `postcard` as the serialization format/library. This uses `serde` so we created Structs that hold all the request and response information we need and can be serialized.
 
   The admin endpoint is very simply and currently only looks at the cache. We should expand it to also show information about the DB, and if everything in the manifest is already cached.
+
+### Fourth Stream
+
+In our Fourth stream we got everything deployed to Fly.io
+
+We started by deploying `slow_server` to Paris.
+We then depolyed `caje` to New Jersey and London, and have it proxying to the `slow_server` in Paris.
+
+We got LiteFS working for `caje` so that the replicas can read the SQLite and the primary can write to it.
+We currently blow up if the replicas try to write to the DB, fixing this is up next!

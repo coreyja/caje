@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2.148"
-fcntl = { git = "https://github.com/coreyja/fcntl-rs.git", branch = "ca/main/work-on-macos" }
+fcntl = { git = "https://github.com/coreyja/fcntl-rs.git", rev = "4a0a3ab" }
