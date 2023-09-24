@@ -23,6 +23,7 @@ fn lockfile(database_path: &str) -> File {
     let fd = OpenOptions::new()
         .read(true)
         .write(true)
+        .create(true)
         .open(lockfile_path)
         .unwrap();
     fd
