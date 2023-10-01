@@ -296,30 +296,27 @@ async fn get_potentially_cached_response(
         let method = method.to_string();
         let url = url.to_string();
 
-        if let Some(database_path) = &app_state.database_path {
+        let lockfile = if let Some(database_path) = &app_state.database_path {
+            let lockfile = litefs_rs::lockfile(database_path);
             let lag = litefs_rs::lag(database_path).into_diagnostic()?;
             info!(?lag, "Got lag from Primary");
 
-            let halted = litefs_rs::halt(database_path).into_diagnostic()?;
-            if halted {
-                info!("Halted database");
-            } else {
-                error!("Could not halt database");
-            }
-        }
+            litefs_rs::halt(&lockfile).into_diagnostic()?;
+            info!("Halted database");
+
+            Some(lockfile)
+        } else {
+            None
+        };
 
         sqlx::query!("INSERT INTO Pages (method, url) VALUES (?, ?)", method, url)
             .execute(&db_pool)
             .await
             .into_diagnostic()?;
 
-        if let Some(database_path) = &app_state.database_path {
-            let unhalted = litefs_rs::unhalt(database_path).into_diagnostic()?;
-            if unhalted {
-                info!("Unhalted database");
-            } else {
-                error!("Could not unhalt database");
-            }
+        if let Some(lockfile) = lockfile {
+            litefs_rs::unhalt(&lockfile).into_diagnostic()?;
+            info!("Unhalted database");
         }
     }
 

@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     fs::{File, OpenOptions},
     os::{fd::AsRawFd, unix::prelude::OpenOptionsExt},
     path::PathBuf,
@@ -6,23 +7,21 @@ use std::{
 };
 
 use libc::flock;
+use thiserror::Error;
 use tracing::info;
 
 const HALT_BYTE: i64 = 72;
 
-pub fn halt(database_path: &str) -> Result<bool, (i32, Option<i32>)> {
+pub fn halt(lockfile: &File) -> Result<(), FlockError> {
     // let (flock, lock_type) = get_flock_and_type();
-    let lockfile = lockfile(database_path);
 
     let fd = lockfile.as_raw_fd();
     let mut flock = get_flock();
 
-    // F_OFD_SETLKW
-    let flock_command = 38;
-
-    let rv = unsafe { libc::fcntl(fd, flock_command.try_into().unwrap(), &mut flock) };
+    // F_OFD_SETLKW = 38
+    let rv = unsafe { libc::fcntl(fd, 38, &mut flock) };
     if rv == 0 {
-        Ok(true)
+        Ok(())
     } else {
         #[cfg(not(target_os = "macos"))]
         let errno_ptr = unsafe { libc::__errno_location() };
@@ -35,23 +34,36 @@ pub fn halt(database_path: &str) -> Result<bool, (i32, Option<i32>)> {
             // *should* be safe here as we checked against NULL pointer..
             Some(unsafe { *errno_ptr })
         };
-        Err((rv, errno))
+        Err(FlockError { errno, rv })
     }
 }
 
-pub fn unhalt(database_path: &str) -> Result<bool, (i32, Option<i32>)> {
-    let mut flock = get_flock();
-    flock.l_type = libc::F_UNLCK;
+#[derive(Error, Debug)]
+pub struct FlockError {
+    pub errno: Option<i32>,
+    pub rv: i32,
+}
 
-    let lockfile = lockfile(database_path);
+impl Display for FlockError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Flock Error | rv={} errno={}",
+            self.rv,
+            self.errno.map(|x| x.to_string()).unwrap_or_default()
+        )
+    }
+}
+
+pub fn unhalt(lockfile: &File) -> Result<(), FlockError> {
+    let mut flock = get_flock();
+    flock.l_type = libc::F_UNLCK.try_into().unwrap();
+
     let fd = lockfile.as_raw_fd();
 
-    // F_OFD_SETLKW
-    let flock_command = 38;
-
-    let rv = unsafe { libc::fcntl(fd, flock_command.try_into().unwrap(), &mut flock) };
+    let rv = unsafe { libc::fcntl(fd, 38, &mut flock) };
     if rv == 0 {
-        Ok(true)
+        Ok(())
     } else {
         #[cfg(not(target_os = "macos"))]
         let errno_ptr = unsafe { libc::__errno_location() };
@@ -64,7 +76,7 @@ pub fn unhalt(database_path: &str) -> Result<bool, (i32, Option<i32>)> {
             // *should* be safe here as we checked against NULL pointer..
             Some(unsafe { *errno_ptr })
         };
-        Err((rv, errno))
+        Err(FlockError { errno, rv })
     }
 }
 
@@ -80,7 +92,7 @@ pub fn lag(database_path: &str) -> std::io::Result<Duration> {
     Ok(lag)
 }
 
-fn lockfile(database_path: &str) -> File {
+pub fn lockfile(database_path: &str) -> File {
     let lockfile_path = format!("{database_path}-lock");
     let fd = OpenOptions::new()
         .read(true)
@@ -96,7 +108,7 @@ fn get_flock() -> flock {
     flock {
         l_start: HALT_BYTE,
         l_len: 1,
-        l_type: libc::F_WRLCK,
+        l_type: libc::F_WRLCK.try_into().unwrap(),
         ..default_flock()
     }
 }
