@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2.148"
-fcntl = { git = "https://github.com/coreyja/fcntl-rs.git", rev = "4a0a3ab" }
+# fcntl = { git = "https://github.com/coreyja/fcntl-rs.git", rev = "6bcaa5f" }
+tracing = "0.1.37"

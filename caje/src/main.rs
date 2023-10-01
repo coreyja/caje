@@ -13,7 +13,7 @@ use http_cache_semantics::{BeforeRequest, CachePolicy};
 use miette::{miette, Context, IntoDiagnostic, Result};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use tracing::info;
+use tracing::{error, info};
 
 const PROXY_FROM_DOMAIN: &str = "slow.coreyja.com";
 const PROXY_ORIGIN_DOMAIN: &str = "slow-server.fly.dev";
@@ -297,14 +297,29 @@ async fn get_potentially_cached_response(
         let url = url.to_string();
 
         if let Some(database_path) = &app_state.database_path {
-            litefs_rs::halt(&database_path).into_diagnostic()?;
+            let lag = litefs_rs::lag(database_path).into_diagnostic()?;
+            info!(?lag, "Got lag from Primary");
+
+            let halted = litefs_rs::halt(database_path).into_diagnostic()?;
+            if halted {
+                info!("Halted database");
+            } else {
+                error!("Could not halt database");
+            }
         }
+
         sqlx::query!("INSERT INTO Pages (method, url) VALUES (?, ?)", method, url)
             .execute(&db_pool)
             .await
             .into_diagnostic()?;
+
         if let Some(database_path) = &app_state.database_path {
-            litefs_rs::unhalt(&database_path).into_diagnostic()?;
+            let unhalted = litefs_rs::unhalt(database_path).into_diagnostic()?;
+            if unhalted {
+                info!("Unhalted database");
+            } else {
+                error!("Could not unhalt database");
+            }
         }
     }
 
