@@ -2,33 +2,34 @@
 
 ## What did I do last time?
 
-### Fifth Stream
+### Sixth Stream
 
-We tried to implement the LiteFS HALT mechanism. We used <https://github.com/superfly/litefs-go/blob/main/litefs.go> as our
-reference implementation.
+Today we got LiteFS Halt mode working!!
 
-We got the code in a spot where we _expected_ it to work, but haven't succesfully gotten it working in Fly (or tried locally).
+The last two puzzle pieces were to use the Open File Descriptor variants of file locking.
+And to keep the File Descriptor open for the duration of HALT process
 
-We ~are currently~ WERE getting an `errno: 38` which we believe means `ENOSYS` or `Function not implemented`. Which is _weird_ cause Fly.io makes LiteFS so it should work on their platform. But as I type this it might be an OS thing, but also strange debain wouldn't support it.
+Now we can do read and writes from _any_ node in our Cluster :tada:
 
-This might have been fixed by changing the lock cmd to `FcntlCmd::SetLockWait`. BUTT this doesn't seem like its actually making the lock correctly. Or maybe litefs isn't reading it correctly?
-
-We are still getting this error from the replica: `error returned from database: (code: 1544) attempt to write a readonly database`
-The Primary doesnt have this issue since it doesn't _need_ HALTing to work to write to the DB
+This means that when a replica gets a request for something it wants to cache, it can use the HALT
+to aquire a write lock and do its write. Then it releases the lock and allows other nodes to continue writing.
+Its NOT recommended to do this for write heavy applications, but for our use case it should be fine.
+Plus I kinda want to stress test the HALT functionality to learn where its limits are.
 
 ## Next Steps
 
-- [ ] Fix the DB so that the replicas can write to it
-  - To do this we need to implement the LiteFS HALT mechanism from <https://github.com/superfly/litefs-go/blob/main/litefs.go>
+- [ ] Write an awesome Readme.md
 - [ ] Create Endpoint to clear the File System Cache
+- [ ] Create Endpoint to clear the SQLite Cache
 - [ ] Create Endpoint to fetch any missing pages from the origin
   - This will be used to populate the cache
+  - If there are things in Sqlite that are not in the File System, we should fetch them from the origin
 - [ ] Move the cache population to a seperate process that runs in the background
 - [ ] Move some hard coded proxy information to config file
 - [ ] Allow proxying to multiple origins
-- [ ] Write an awesome Readme.md
 - [ ] `_caje/list` should return the TTL of pages in the cache
 - [ ] Move the cache dir to somewhere persisted in the Fly.io VM
+- [ ] Cleanup and Publish `litefs-rs` to crates.io
 
 ## History
 
@@ -64,3 +65,17 @@ We then depolyed `caje` to New Jersey and London, and have it proxying to the `s
 
 We got LiteFS working for `caje` so that the replicas can read the SQLite and the primary can write to it.
 We currently blow up if the replicas try to write to the DB, fixing this is up next!
+
+### Fifth Stream
+
+We tried to implement the LiteFS HALT mechanism. We used <https://github.com/superfly/litefs-go/blob/main/litefs.go> as our
+reference implementation.
+
+We got the code in a spot where we _expected_ it to work, but haven't succesfully gotten it working in Fly (or tried locally).
+
+We ~are currently~ WERE getting an `errno: 38` which we believe means `ENOSYS` or `Function not implemented`. Which is _weird_ cause Fly.io makes LiteFS so it should work on their platform. But as I type this it might be an OS thing, but also strange debain wouldn't support it.
+
+This might have been fixed by changing the lock cmd to `FcntlCmd::SetLockWait`. BUTT this doesn't seem like its actually making the lock correctly. Or maybe litefs isn't reading it correctly?
+
+We are still getting this error from the replica: `error returned from database: (code: 1544) attempt to write a readonly database`
+The Primary doesnt have this issue since it doesn't _need_ HALTing to work to write to the DB
