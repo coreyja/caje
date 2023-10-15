@@ -2,21 +2,7 @@
 
 ## What did I do last time?
 
-### Sixth Stream
-
-Today we got LiteFS Halt mode working!!
-
-The last two puzzle pieces were to use the Open File Descriptor variants of file locking.
-And to keep the File Descriptor open for the duration of HALT process
-
-Now we can do read and writes from _any_ node in our Cluster :tada:
-
-This means that when a replica gets a request for something it wants to cache, it can use the HALT
-to aquire a write lock and do its write. Then it releases the lock and allows other nodes to continue writing.
-Its NOT recommended to do this for write heavy applications, but for our use case it should be fine.
-Plus I kinda want to stress test the HALT functionality to learn where its limits are.
-
-## Next Steps
+### Seventh Stream
 
 - [x] `_caje/list` should return the TTL of pages in the cache
 - [x] Create Endpoint to clear the File System Cache
@@ -25,10 +11,24 @@ Plus I kinda want to stress test the HALT functionality to learn where its limit
 - [x] Create Endpoint to fetch any missing pages from the origin
   - This will be used to populate the cache
   - If there are things in Sqlite that are not in the File System, we should fetch them from the origin
+- [x] Setup `.vscode` for Debugging and sharing recommeneded extensions
+
+Today we worked on some of the Admin endpoints. We improved `_caje/list` to show the TTL of the cached pages.
+
+We also added some endpoints to clear both the Filesystem and Database. These were VERY helpful in debugging
+the `_caje/populate` endpoint.
+We spent some time trying to figure out why we weren't use the cached requests after we populated the cache from the DB. For this debugging we decided to try an actual debugger for probably my first time in Rust!
+Took a bit of figuring out how to use it, but eventually learned that the HOST headers weren't matching mostly because I was using the ORIGIN instead of the requested HOST.
+
+Justus_Fluegel from Twitch Chat helped me get the vscode settings all nicely wired up for Debugging and Building our Rust project. Thanks for the help!
+
+## Next Steps
+
 - [ ] Move some hard coded proxy information to config file
 - [ ] Allow proxying to multiple origins
 - [ ] Move the cache population to a seperate process that runs in the background
 - [ ] Make `_caje` endpoints require some kind of authentication
+  - Probably via some kind of Axum extractor?
 - [ ] Move the cache dir to somewhere persisted in the Fly.io VM
 - [ ] Write an awesome Readme.md
 - [ ] Cleanup and Publish `litefs-rs` to crates.io
@@ -84,3 +84,17 @@ This might have been fixed by changing the lock cmd to `FcntlCmd::SetLockWait`. 
 
 We are still getting this error from the replica: `error returned from database: (code: 1544) attempt to write a readonly database`
 The Primary doesnt have this issue since it doesn't _need_ HALTing to work to write to the DB
+
+### Sixth Stream
+
+Today we got LiteFS Halt mode working!!
+
+The last two puzzle pieces were to use the Open File Descriptor variants of file locking.
+And to keep the File Descriptor open for the duration of HALT process
+
+Now we can do read and writes from _any_ node in our Cluster :tada:
+
+This means that when a replica gets a request for something it wants to cache, it can use the HALT
+to aquire a write lock and do its write. Then it releases the lock and allows other nodes to continue writing.
+Its NOT recommended to do this for write heavy applications, but for our use case it should be fine.
+Plus I kinda want to stress test the HALT functionality to learn where its limits are.
