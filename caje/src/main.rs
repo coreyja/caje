@@ -70,6 +70,10 @@ async fn main() -> Result<()> {
             "/_caje/clear_fs",
             axum::routing::post(admin::clear_fs::route),
         )
+        .route(
+            "/_caje/clear_db",
+            axum::routing::post(admin::clear_db::route),
+        )
         .fallback(proxy_request)
         .with_state(app_state);
 
