@@ -18,17 +18,19 @@ Plus I kinda want to stress test the HALT functionality to learn where its limit
 
 ## Next Steps
 
-- [ ] Write an awesome Readme.md
+- [ ] `_caje/list` should return the TTL of pages in the cache
 - [ ] Create Endpoint to clear the File System Cache
 - [ ] Create Endpoint to clear the SQLite Cache
 - [ ] Create Endpoint to fetch any missing pages from the origin
   - This will be used to populate the cache
   - If there are things in Sqlite that are not in the File System, we should fetch them from the origin
-- [ ] Move the cache population to a seperate process that runs in the background
+- [ ] Make sure DB doesn't record duplicate entries
 - [ ] Move some hard coded proxy information to config file
 - [ ] Allow proxying to multiple origins
-- [ ] `_caje/list` should return the TTL of pages in the cache
+- [ ] Move the cache population to a seperate process that runs in the background
+- [ ] Make `_caje` endpoints require some kind of authentication
 - [ ] Move the cache dir to somewhere persisted in the Fly.io VM
+- [ ] Write an awesome Readme.md
 - [ ] Cleanup and Publish `litefs-rs` to crates.io
 
 ## History
