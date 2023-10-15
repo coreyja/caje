@@ -10,6 +10,7 @@ use axum::{
 use cacache::Metadata;
 use http::{uri::PathAndQuery, HeaderMap, Method, Request, Response, StatusCode, Uri, Version};
 use http_cache_semantics::{BeforeRequest, CachePolicy};
+use maud::html;
 use miette::{miette, Context, IntoDiagnostic, Result};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -79,34 +80,44 @@ async fn main() -> Result<()> {
 async fn admin_list_entries(
     State(db_pool): State<SqlitePool>,
 ) -> Result<impl IntoResponse, String> {
-    let entries: Result<Vec<Metadata>, _> =
+    let file_system_entries: Result<Vec<Metadata>, _> =
         tokio::task::spawn_blocking(move || cacache::list_sync(CACHE_DIR).collect())
             .await
             .into_diagnostic()
             .map_err(|e| e.to_string())?;
-    let entries = entries.unwrap_or_default();
+    let file_system_entries = file_system_entries.unwrap_or_default();
 
-    let entries = entries
+    let file_system_entries = file_system_entries
         .into_iter()
         .map(|entry| entry.key)
         .collect::<Vec<_>>();
 
-    let pages = sqlx::query!("SELECT * FROM Pages")
+    let db_pages = sqlx::query!("SELECT * FROM Pages")
         .fetch_all(&db_pool)
         .await
         .into_diagnostic()
         .map_err(|e| e.to_string())?;
 
-    let pages = pages
+    let db_pages = db_pages
         .into_iter()
         .map(|page| format!("{} {}", page.method, page.url))
         .collect::<Vec<_>>();
 
-    let resp = format!(
-        "Entries:\n{}\n\nPages:{}",
-        entries.join("\n"),
-        pages.join("\n")
-    );
+    let resp = html! {
+        h2 { "File System" }
+        ul {
+            @for entry in file_system_entries {
+                li { (entry) }
+            }
+        }
+
+        h2 { "Database" }
+        ul {
+            @for entry in db_pages {
+                li { (entry) }
+            }
+        }
+    };
 
     Ok((StatusCode::OK, resp))
 }
@@ -296,17 +307,18 @@ async fn get_potentially_cached_response(
         let method = method.to_string();
         let url = url.to_string();
 
-        let lockfile = if let Some(database_path) = &app_state.database_path {
-            let lockfile = litefs_rs::lockfile(database_path);
-            let lag = litefs_rs::lag(database_path).into_diagnostic()?;
-            info!(?lag, "Got lag from Primary");
+        let lockfile = match (std::env::var("LITEFS"), &app_state.database_path) {
+            (Ok(_), Some(database_path)) => {
+                let lockfile = litefs_rs::lockfile(database_path).into_diagnostic()?;
+                let lag = litefs_rs::lag(database_path).into_diagnostic()?;
+                info!(?lag, "Got lag from Primary");
 
-            litefs_rs::halt(&lockfile).into_diagnostic()?;
-            info!("Halted database");
+                litefs_rs::halt(&lockfile).into_diagnostic()?;
+                info!("Halted database");
 
-            Some(lockfile)
-        } else {
-            None
+                Some(lockfile)
+            }
+            _ => None,
         };
 
         sqlx::query!("INSERT INTO Pages (method, url) VALUES (?, ?)", method, url)

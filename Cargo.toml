@@ -1,2 +1,3 @@
 [workspace]
 members = ["slow_server", "caje", "litefs-rs"]
+resolver = "2"

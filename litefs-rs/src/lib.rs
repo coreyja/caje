@@ -82,7 +82,14 @@ pub fn unhalt(lockfile: &File) -> Result<(), FlockError> {
 
 pub fn lag(database_path: &str) -> std::io::Result<Duration> {
     let database_path = PathBuf::from(database_path);
-    let lagfile = database_path.parent().unwrap().join(".lag");
+    let parent = database_path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Couldnt get parent directory of DB",
+        )
+    })?;
+
+    let lagfile = parent.join(".lag");
     let lag = std::fs::read_to_string(lagfile)?;
     info!(lag, "Stringy Lag");
 
@@ -92,15 +99,14 @@ pub fn lag(database_path: &str) -> std::io::Result<Duration> {
     Ok(lag)
 }
 
-pub fn lockfile(database_path: &str) -> File {
+pub fn lockfile(database_path: &str) -> Result<std::fs::File, std::io::Error> {
     let lockfile_path = format!("{database_path}-lock");
     let fd = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .mode(0o666)
-        .open(lockfile_path)
-        .unwrap();
+        .open(lockfile_path);
     fd
 }
 

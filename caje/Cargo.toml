@@ -29,3 +29,4 @@ http-serde = "1.1.3"
 postcard = { version = "1.0.7", features = ["use-std"] }
 sqlx = { version = "0.7", features = ["runtime-tokio", "tls-rustls", "sqlite"] }
 litefs-rs = { path = "../litefs-rs" }
+maud = { version = "0.25.0", features = ["axum"] }

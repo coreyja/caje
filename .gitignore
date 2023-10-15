@@ -17,4 +17,5 @@ Cargo.lock
 tmp/
 
 *.sqlite3
+*.sqlite3-lock
 .envrc

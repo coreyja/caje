@@ -32,7 +32,7 @@ exit-on-error: false
 # the last command to be long-running (e.g. an application server). When the
 # last command exits, LiteFS is shut down.
 exec:
-  - cmd: "./caje"
+  - cmd: "LITEFS=true ./caje"
 
 # The lease section specifies how the cluster will be managed. We're using the
 # "consul" lease type so that our application can dynamically change the primary.
