@@ -21,10 +21,10 @@ Plus I kinda want to stress test the HALT functionality to learn where its limit
 - [x] `_caje/list` should return the TTL of pages in the cache
 - [x] Create Endpoint to clear the File System Cache
 - [x] Create Endpoint to clear the SQLite Cache
+- [x] Make sure DB doesn't record duplicate entries
 - [ ] Create Endpoint to fetch any missing pages from the origin
   - This will be used to populate the cache
   - If there are things in Sqlite that are not in the File System, we should fetch them from the origin
-- [ ] Make sure DB doesn't record duplicate entries
 - [ ] Move some hard coded proxy information to config file
 - [ ] Allow proxying to multiple origins
 - [ ] Move the cache population to a seperate process that runs in the background

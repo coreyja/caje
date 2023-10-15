@@ -292,10 +292,21 @@ async fn get_potentially_cached_response(
             _ => None,
         };
 
-        sqlx::query!("INSERT INTO Pages (method, url) VALUES (?, ?)", method, url)
-            .execute(&db_pool)
-            .await
-            .into_diagnostic()?;
+        let existing_db_entry = sqlx::query!(
+            "SELECT * FROM Pages WHERE method = ? AND url = ?",
+            method,
+            url
+        )
+        .fetch_optional(&db_pool)
+        .await
+        .into_diagnostic()?;
+
+        if existing_db_entry.is_none() {
+            sqlx::query!("INSERT INTO Pages (method, url) VALUES (?, ?)", method, url)
+                .execute(&db_pool)
+                .await
+                .into_diagnostic()?;
+        }
 
         if let Some(lockfile) = lockfile {
             litefs_rs::unhalt(&lockfile).into_diagnostic()?;

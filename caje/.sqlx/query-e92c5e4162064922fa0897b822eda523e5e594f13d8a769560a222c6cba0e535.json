@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT * FROM Pages WHERE method = ? AND url = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "method",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "url",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e92c5e4162064922fa0897b822eda523e5e594f13d8a769560a222c6cba0e535"
+}
