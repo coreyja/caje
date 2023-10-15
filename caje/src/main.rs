@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::{error, info};
 
+pub mod admin;
+
 const PROXY_FROM_DOMAIN: &str = "slow.coreyja.com";
 const PROXY_ORIGIN_DOMAIN: &str = "slow-server.fly.dev";
 
@@ -63,7 +65,7 @@ async fn main() -> Result<()> {
     };
 
     let app = Router::new()
-        .route("/_caje/list", axum::routing::get(admin_list_entries))
+        .route("/_caje/list", axum::routing::get(admin::list::route))
         .fallback(proxy_request)
         .with_state(app_state);
 
@@ -75,51 +77,6 @@ async fn main() -> Result<()> {
         .into_diagnostic()?;
 
     Ok(())
-}
-
-async fn admin_list_entries(
-    State(db_pool): State<SqlitePool>,
-) -> Result<impl IntoResponse, String> {
-    let file_system_entries: Result<Vec<Metadata>, _> =
-        tokio::task::spawn_blocking(move || cacache::list_sync(CACHE_DIR).collect())
-            .await
-            .into_diagnostic()
-            .map_err(|e| e.to_string())?;
-    let file_system_entries = file_system_entries.unwrap_or_default();
-
-    let file_system_entries = file_system_entries
-        .into_iter()
-        .map(|entry| entry.key)
-        .collect::<Vec<_>>();
-
-    let db_pages = sqlx::query!("SELECT * FROM Pages")
-        .fetch_all(&db_pool)
-        .await
-        .into_diagnostic()
-        .map_err(|e| e.to_string())?;
-
-    let db_pages = db_pages
-        .into_iter()
-        .map(|page| format!("{} {}", page.method, page.url))
-        .collect::<Vec<_>>();
-
-    let resp = html! {
-        h2 { "File System" }
-        ul {
-            @for entry in file_system_entries {
-                li { (entry) }
-            }
-        }
-
-        h2 { "Database" }
-        ul {
-            @for entry in db_pages {
-                li { (entry) }
-            }
-        }
-    };
-
-    Ok((StatusCode::OK, resp))
 }
 
 // #[axum_macros::debug_handler]
@@ -192,6 +149,25 @@ struct CachedResponse {
     cached_at: SystemTime,
 }
 
+async fn get_policy_from_cache(key: &str) -> Result<(CachePolicy, http::Response<Bytes>)> {
+    let cached = cacache::read(CACHE_DIR, key)
+        .await
+        .context("Could not read from cache")?;
+    let cached = postcard::from_bytes::<CachedResponse>(&cached)
+        .map_err(|_| miette!("Could not deserialize cached response"))?;
+
+    let response = http_response_from_parts(cached.response)
+        .map_err(|_| miette!("Could not build response"))?;
+
+    let request =
+        http_request_from_parts(cached.request).map_err(|_| miette!("Could not build request"))?;
+
+    let policy =
+        CachePolicy::new_options(&request, &response, cached.cached_at, Default::default());
+
+    Ok((policy, response))
+}
+
 #[tracing::instrument(skip_all)]
 async fn get_potentially_cached_response(
     request: Request<Body>,
@@ -205,22 +181,9 @@ async fn get_potentially_cached_response(
 
     {
         let cache_key = format!("{}@{}", method, url);
-        let cached_response = cacache::read(CACHE_DIR, cache_key)
-            .await
-            .context("Could not write to cache");
+        let policy = get_policy_from_cache(&cache_key).await;
 
-        if let Ok(cached) = cached_response {
-            let cached = postcard::from_bytes::<CachedResponse>(&cached)
-                .map_err(|_| miette!("Could not deserialize cached response"))?;
-
-            let response = http_response_from_parts(cached.response)
-                .map_err(|_| miette!("Could not build response"))?;
-
-            let request = http_request_from_parts(cached.request)
-                .map_err(|_| miette!("Could not build request"))?;
-
-            let policy =
-                CachePolicy::new_options(&request, &response, cached.cached_at, Default::default());
+        if let Ok((policy, response)) = policy {
             let can_cache = policy.before_request(&request, SystemTime::now());
 
             match can_cache {

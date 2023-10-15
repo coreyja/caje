@@ -18,7 +18,7 @@ Plus I kinda want to stress test the HALT functionality to learn where its limit
 
 ## Next Steps
 
-- [ ] `_caje/list` should return the TTL of pages in the cache
+- [x] `_caje/list` should return the TTL of pages in the cache
 - [ ] Create Endpoint to clear the File System Cache
 - [ ] Create Endpoint to clear the SQLite Cache
 - [ ] Create Endpoint to fetch any missing pages from the origin
