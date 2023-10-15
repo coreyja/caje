@@ -66,6 +66,10 @@ async fn main() -> Result<()> {
 
     let app = Router::new()
         .route("/_caje/list", axum::routing::get(admin::list::route))
+        .route(
+            "/_caje/clear_fs",
+            axum::routing::post(admin::clear_fs::route),
+        )
         .fallback(proxy_request)
         .with_state(app_state);
 
