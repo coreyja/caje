@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT method, url FROM Pages",
+  "describe": {
+    "columns": [
+      {
+        "name": "method",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "url",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "9476683a8128884221a6ec2803845d40613e9527969584fd1eaced7cc4a1a60b"
+}

@@ -22,7 +22,7 @@ Plus I kinda want to stress test the HALT functionality to learn where its limit
 - [x] Create Endpoint to clear the File System Cache
 - [x] Create Endpoint to clear the SQLite Cache
 - [x] Make sure DB doesn't record duplicate entries
-- [ ] Create Endpoint to fetch any missing pages from the origin
+- [x] Create Endpoint to fetch any missing pages from the origin
   - This will be used to populate the cache
   - If there are things in Sqlite that are not in the File System, we should fetch them from the origin
 - [ ] Move some hard coded proxy information to config file
@@ -32,6 +32,9 @@ Plus I kinda want to stress test the HALT functionality to learn where its limit
 - [ ] Move the cache dir to somewhere persisted in the Fly.io VM
 - [ ] Write an awesome Readme.md
 - [ ] Cleanup and Publish `litefs-rs` to crates.io
+- [ ] Look into setting Proxy headers 'correctly'
+- [ ] Use the returned `request` from cache-semantics when we revalidate from the origin
+- [ ] Decide if the DB should also have the serialized Body so we can make origin requests better [what about headers?]
 
 ## History
 

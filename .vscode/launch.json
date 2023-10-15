@@ -1,0 +1,103 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    
+
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'slow_server'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=slow_server",
+          "--package=slow_server"
+        ],
+        "filter": {
+          "name": "slow_server",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'slow_server'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=slow_server",
+          "--package=slow_server"
+        ],
+        "filter": {
+          "name": "slow_server",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'caje'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=caje",
+          "--package=caje"
+        ],
+        "filter": {
+          "name": "caje",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'caje'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=caje",
+          "--package=caje"
+        ],
+        "filter": {
+          "name": "caje",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'litefs-rs'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=litefs-rs"
+        ],
+        "filter": {
+          "name": "litefs-rs",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

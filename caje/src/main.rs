@@ -1,4 +1,4 @@
-use std::{fs::OpenOptions, net::SocketAddr, time::SystemTime};
+use std::{fmt::Display, fs::OpenOptions, net::SocketAddr, time::SystemTime};
 
 use axum::{
     body::{Body, Bytes},
@@ -74,6 +74,10 @@ async fn main() -> Result<()> {
             "/_caje/clear_db",
             axum::routing::post(admin::clear_db::route),
         )
+        .route(
+            "/_caje/populate",
+            axum::routing::post(admin::populate::route),
+        )
         .fallback(proxy_request)
         .with_state(app_state);
 
@@ -133,7 +137,8 @@ struct InnerCachedRequest {
     #[serde(with = "http_serde::header_map")]
     pub headers: HeaderMap,
 
-    body: Vec<u8>,
+    // TODO: Can this just be a Bytes
+    body: Option<Vec<u8>>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -176,6 +181,33 @@ async fn get_policy_from_cache(key: &str) -> Result<(CachePolicy, http::Response
     Ok((policy, response))
 }
 
+pub fn cache_key(method: impl Display, url: impl Display) -> String {
+    format!("{}@{}", method, url)
+}
+
+pub struct WrappedError(miette::Report);
+
+impl IntoResponse for WrappedError {
+    fn into_response(self) -> axum::response::Response {
+        let err = self.0.to_string();
+        let resp = html! {
+            h1 { "Error" }
+            p { (err) }
+        };
+
+        (StatusCode::INTERNAL_SERVER_ERROR, resp).into_response()
+    }
+}
+
+impl<E> From<E> for WrappedError
+where
+    E: Into<miette::Report>,
+{
+    fn from(err: E) -> Self {
+        Self(err.into())
+    }
+}
+
 #[tracing::instrument(skip_all)]
 async fn get_potentially_cached_response(
     request: Request<Body>,
@@ -188,19 +220,29 @@ async fn get_potentially_cached_response(
     info!("Requesting: {}", url);
 
     {
-        let cache_key = format!("{}@{}", method, url);
+        let cache_key = cache_key(&method, &url);
         let policy = get_policy_from_cache(&cache_key).await;
 
         if let Ok((policy, response)) = policy {
             let can_cache = policy.before_request(&request, SystemTime::now());
 
             match can_cache {
-                BeforeRequest::Fresh(_) => {
-                    info!("Cache hit for: {}", url);
+                // TODO: Use the Parts from Fresh to build the response
+                BeforeRequest::Fresh(parts) => {
+                    info!(parts =? parts, "Cache hit for: {}", url);
                     return Ok(response);
                 }
-                BeforeRequest::Stale { matches, request } => {
-                    info!(matches =? matches, request =? request, "Cache hit for: {} but stale", url);
+                BeforeRequest::Stale {
+                    matches,
+                    request: revalidation_request,
+                } => {
+                    info!(
+                        matches =? matches,
+                        revalidation_request =? revalidation_request,
+                        original_request =? request,
+                        ttl =? policy.time_to_live(SystemTime::now()),
+                        "Cache hit for: {} but not-usable", url
+                    );
                 }
             };
         }
@@ -359,7 +401,11 @@ fn http_request_from_parts(parts: InnerCachedRequest) -> Result<http::Request<By
         builder = builder.header(key, value);
     }
 
-    let body: Bytes = body.into();
+    let body: Bytes = if let Some(b) = body {
+        b.into()
+    } else {
+        Bytes::new()
+    };
 
     builder.body(body).into_diagnostic()
 }
@@ -377,7 +423,21 @@ impl IntoInnerCachedRequest for Request<Bytes> {
             uri: parts.uri,
             version: parts.version,
             headers: parts.headers,
-            body: body.to_vec(),
+            body: Some(body.to_vec()),
+        })
+    }
+}
+
+impl IntoInnerCachedRequest for Request<()> {
+    fn into_inner_cached_request(self) -> Result<InnerCachedRequest> {
+        let (parts, _) = self.into_parts();
+
+        Ok(InnerCachedRequest {
+            method: parts.method,
+            uri: parts.uri,
+            version: parts.version,
+            headers: parts.headers,
+            body: None,
         })
     }
 }
