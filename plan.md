@@ -30,7 +30,6 @@ Justus_Fluegel from Twitch Chat helped me get the vscode settings all nicely wir
 - [ ] Make `_caje` endpoints require some kind of authentication
   - Probably via some kind of Axum extractor?
 - [ ] Move the cache dir to somewhere persisted in the Fly.io VM
-- [ ] Write an awesome Readme.md
 - [ ] Cleanup and Publish `litefs-rs` to crates.io
 - [ ] Look into setting Proxy headers 'correctly'
 - [ ] Use the returned `request` from cache-semantics when we revalidate from the origin
