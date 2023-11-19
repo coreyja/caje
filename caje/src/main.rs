@@ -7,13 +7,16 @@ use axum::{
     RequestExt, Router,
 };
 
+use base64::Engine;
 use cacache::Metadata;
+use debug_ignore::DebugIgnore;
 use http::{uri::PathAndQuery, HeaderMap, Method, Request, Response, StatusCode, Uri, Version};
 use http_cache_semantics::{BeforeRequest, CachePolicy};
 use maud::html;
 use miette::{miette, Context, IntoDiagnostic, Result};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use tower_cookies::{CookieManagerLayer, Key};
 use tracing::{error, info};
 
 pub mod admin;
@@ -25,6 +28,7 @@ const PROXY_ORIGIN_DOMAIN: &str = "slow-server.fly.dev";
 struct AppState {
     db_pool: SqlitePool,
     database_path: Option<String>,
+    cookie_key: DebugIgnore<Key>,
 }
 
 impl FromRef<AppState> for SqlitePool {
@@ -59,12 +63,23 @@ async fn main() -> Result<()> {
     sqlx::migrate!().run(&db_pool).await.into_diagnostic()?;
 
     let database_path = database_path.ok();
+
+    let cookie_key = std::env::var("COOKIE_KEY").into_diagnostic()?;
+    let cookie_key = base64::engine::general_purpose::STANDARD
+        .decode(cookie_key.as_bytes())
+        .into_diagnostic()?;
+    let cookie_key = Key::derive_from(&cookie_key);
+    let cookie_key = DebugIgnore(cookie_key);
+
     let app_state = AppState {
         db_pool: db_pool.clone(),
         database_path,
+        cookie_key,
     };
 
     let app = Router::new()
+        .route("/_caje/auth", axum::routing::get(admin::auth::get))
+        .route("/_caje/auth", axum::routing::post(admin::auth::post))
         .route("/_caje/list", axum::routing::get(admin::list::route))
         .route(
             "/_caje/clear_fs",
@@ -79,6 +94,7 @@ async fn main() -> Result<()> {
             axum::routing::post(admin::populate::route),
         )
         .fallback(proxy_request)
+        .layer(CookieManagerLayer::new())
         .with_state(app_state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3001));
