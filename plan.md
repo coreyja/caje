@@ -24,11 +24,11 @@ Justus_Fluegel from Twitch Chat helped me get the vscode settings all nicely wir
 
 ## Next Steps
 
+- [ ] Make `_caje` endpoints require some kind of authentication
+- [ ] Add admin Dashbaord
 - [ ] Move some hard coded proxy information to config file
 - [ ] Allow proxying to multiple origins
 - [ ] Move the cache population to a seperate process that runs in the background
-- [ ] Make `_caje` endpoints require some kind of authentication
-  - Probably via some kind of Axum extractor?
 - [ ] Move the cache dir to somewhere persisted in the Fly.io VM
 - [ ] Cleanup and Publish `litefs-rs` to crates.io
 - [ ] Look into setting Proxy headers 'correctly'
