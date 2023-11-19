@@ -2,13 +2,12 @@ use async_trait::async_trait;
 use axum::{
     extract::{FromRequestParts, State},
     response::{IntoResponse, Redirect},
-    RequestPartsExt,
+    Form,
 };
-use base64::Engine;
-use http::StatusCode;
 use maud::html;
-use sqlx::{query, query_as, Sqlite, SqlitePool};
-use tower_cookies::{Cookie, Cookies, Key};
+use serde::Deserialize;
+use sqlx::{query_as, SqlitePool};
+use tower_cookies::{Cookie, Cookies};
 
 use crate::AppState;
 
@@ -25,6 +24,8 @@ pub(crate) async fn get(State(app_state): State<AppState>, cookies: Cookies) -> 
       }
 
       form method="post" action="/_caje/auth" {
+        input type="password" name="password";
+
         input type="submit" value="Login";
       }
     }
@@ -75,10 +76,23 @@ impl FromRequestParts<AppState> for DBSession {
     }
 }
 
-pub(crate) async fn post(State(state): State<AppState>, cookies: Cookies) -> impl IntoResponse {
+#[derive(Deserialize)]
+pub(crate) struct FormState {
+    password: String,
+}
+
+pub(crate) async fn post(
+    State(state): State<AppState>,
+    cookies: Cookies,
+    Form(form): Form<FormState>,
+) -> impl IntoResponse {
     let private = cookies.private(&state.cookie_key.0);
 
     let mut session_cookie = private.get("session_id");
+
+    if form.password != state.admin_password {
+        return Redirect::to("/_caje/list");
+    }
 
     if let Some(s) = &session_cookie {
         let session = DBSession::fetch(&state.db_pool, s.value().to_string()).await;

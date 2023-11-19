@@ -29,6 +29,7 @@ struct AppState {
     db_pool: SqlitePool,
     database_path: Option<String>,
     cookie_key: DebugIgnore<Key>,
+    admin_password: String,
 }
 
 impl FromRef<AppState> for SqlitePool {
@@ -71,10 +72,13 @@ async fn main() -> Result<()> {
     let cookie_key = Key::derive_from(&cookie_key);
     let cookie_key = DebugIgnore(cookie_key);
 
+    let admin_password = std::env::var("ADMIN_AUTH_KEY").into_diagnostic()?;
+
     let app_state = AppState {
         db_pool: db_pool.clone(),
         database_path,
         cookie_key,
+        admin_password,
     };
 
     let app = Router::new()
