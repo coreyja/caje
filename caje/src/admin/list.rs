@@ -34,6 +34,17 @@ pub(crate) async fn route(
         .collect::<Vec<_>>();
 
     let resp = html! {
+        h2 { "Actions" }
+        form method="post" action="/_caje/clear_db" {
+            input type="submit" value="Clear DB";
+        }
+        form method="post" action="/_caje/clear_fs" {
+            input type="submit" value="Clear FS";
+        }
+        form method="post" action="/_caje/populate" {
+            input type="submit" value="Populate Cache";
+        }
+
         h2 { "File System" }
         ul {
             @for entry in file_system_entries {

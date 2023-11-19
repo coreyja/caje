@@ -16,8 +16,12 @@ use crate::{
     PROXY_FROM_DOMAIN, PROXY_ORIGIN_DOMAIN,
 };
 
-#[axum_macros::debug_handler]
-pub async fn route(State(db_pool): State<SqlitePool>) -> Result<impl IntoResponse, WrappedError> {
+use super::auth::DBSession;
+
+pub(crate) async fn route(
+    State(db_pool): State<SqlitePool>,
+    _: DBSession,
+) -> Result<impl IntoResponse, WrappedError> {
     let db_pages = sqlx::query!("SELECT * FROM Pages")
         .fetch_all(&db_pool)
         .await

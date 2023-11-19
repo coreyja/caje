@@ -5,7 +5,12 @@ use axum::{
 use miette::IntoDiagnostic;
 use sqlx::SqlitePool;
 
-pub async fn route(State(db_pool): State<SqlitePool>) -> Result<impl IntoResponse, String> {
+use super::auth::DBSession;
+
+pub(crate) async fn route(
+    State(db_pool): State<SqlitePool>,
+    _: DBSession,
+) -> Result<impl IntoResponse, String> {
     sqlx::query!("DELETE FROM Pages")
         .execute(&db_pool)
         .await

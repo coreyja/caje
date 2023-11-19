@@ -3,7 +3,9 @@ use miette::IntoDiagnostic;
 
 use crate::CACHE_DIR;
 
-pub async fn route() -> Result<impl IntoResponse, String> {
+use super::auth::DBSession;
+
+pub(crate) async fn route(_: DBSession) -> Result<impl IntoResponse, String> {
     cacache::clear(CACHE_DIR)
         .await
         .into_diagnostic()
