@@ -2,34 +2,31 @@
 
 ## What did I do last time?
 
-### Seventh Stream
+### Eigth Stream
 
-- [x] `_caje/list` should return the TTL of pages in the cache
-- [x] Create Endpoint to clear the File System Cache
-- [x] Create Endpoint to clear the SQLite Cache
-- [x] Make sure DB doesn't record duplicate entries
-- [x] Create Endpoint to fetch any missing pages from the origin
-  - This will be used to populate the cache
-  - If there are things in Sqlite that are not in the File System, we should fetch them from the origin
-- [x] Setup `.vscode` for Debugging and sharing recommeneded extensions
+- [x] Make `_caje` endpoints require some kind of authentication
+- [x] Add admin Dashbaord
 
-Today we worked on some of the Admin endpoints. We improved `_caje/list` to show the TTL of the cached pages.
+On this stream we focused on Authentication for our Admin endpoints.
 
-We also added some endpoints to clear both the Filesystem and Database. These were VERY helpful in debugging
-the `_caje/populate` endpoint.
-We spent some time trying to figure out why we weren't use the cached requests after we populated the cache from the DB. For this debugging we decided to try an actual debugger for probably my first time in Rust!
-Took a bit of figuring out how to use it, but eventually learned that the HOST headers weren't matching mostly because I was using the ORIGIN instead of the requested HOST.
+We added Sessions to our Database, and are storing `session_id`s in Private Cookies.
+These cookies are encrypted with a secret key that is stored in an environment variable.
 
-Justus_Fluegel from Twitch Chat helped me get the vscode settings all nicely wired up for Debugging and Building our Rust project. Thanks for the help!
+We added browser facing endpoints for Auth, and make the `_caje/list` our Admin Dashboard 'homebase'.
+This page now has buttons to kick off the actions that previously needed an HTTP client (clearing the DB
+and File System)
+
+We looking into Passkeys a tiny bit, but didn't find any clear documentation on how to use them in Rust.
+We found 1 libary [https://github.com/kanidm/webauthn-rs] that looked like it might work, but it uses OpenSSL which we are avoiding here.
+The other library we found was [https://crates.io/crates/passkey] but it doesn't seem to implement the server/application side of things and focuses on the client side.
 
 ## Next Steps
 
-- [ ] Make `_caje` endpoints require some kind of authentication
-- [ ] Add admin Dashbaord
 - [ ] Move some hard coded proxy information to config file
 - [ ] Allow proxying to multiple origins
 - [ ] Move the cache population to a seperate process that runs in the background
 - [ ] Move the cache dir to somewhere persisted in the Fly.io VM
+- [ ] Add Passkeys for Admin Auth
 - [ ] Cleanup and Publish `litefs-rs` to crates.io
 - [ ] Look into setting Proxy headers 'correctly'
 - [ ] Use the returned `request` from cache-semantics when we revalidate from the origin
@@ -97,3 +94,23 @@ This means that when a replica gets a request for something it wants to cache, i
 to aquire a write lock and do its write. Then it releases the lock and allows other nodes to continue writing.
 Its NOT recommended to do this for write heavy applications, but for our use case it should be fine.
 Plus I kinda want to stress test the HALT functionality to learn where its limits are.
+
+### Seventh Stream
+
+- [x] `_caje/list` should return the TTL of pages in the cache
+- [x] Create Endpoint to clear the File System Cache
+- [x] Create Endpoint to clear the SQLite Cache
+- [x] Make sure DB doesn't record duplicate entries
+- [x] Create Endpoint to fetch any missing pages from the origin
+  - This will be used to populate the cache
+  - If there are things in Sqlite that are not in the File System, we should fetch them from the origin
+- [x] Setup `.vscode` for Debugging and sharing recommeneded extensions
+
+Today we worked on some of the Admin endpoints. We improved `_caje/list` to show the TTL of the cached pages.
+
+We also added some endpoints to clear both the Filesystem and Database. These were VERY helpful in debugging
+the `_caje/populate` endpoint.
+We spent some time trying to figure out why we weren't use the cached requests after we populated the cache from the DB. For this debugging we decided to try an actual debugger for probably my first time in Rust!
+Took a bit of figuring out how to use it, but eventually learned that the HOST headers weren't matching mostly because I was using the ORIGIN instead of the requested HOST.
+
+Justus_Fluegel from Twitch Chat helped me get the vscode settings all nicely wired up for Debugging and Building our Rust project. Thanks for the help!

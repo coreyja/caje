@@ -37,12 +37,17 @@ We utitlize the `litefs` HALT mechanism to allow writing to the shared DB from r
 
 ## Admin Endpoints
 
-The following admin endpoints exist to help with managing the cache, and debugging `caje`. They are currently UNAUTHENTICATED, and should be locked down to only allow requests from authorized admins.
+The following admin endpoints exist to help with managing the cache, and debugging `caje`. They are currently authenticated, with a shared password that is set as an environment variable.
+
+We'd like to change this to use Passkeys in the future.
 
 - `GET#_caje/list` Displays the current values in both the FileSystem cache and the DB Manifest
 - `POST#_caje/clear_fs` Clears the File System cache on the node that recieves this request
 - `POST#_caje/clear_db` Clears the DB Manifest which is shared between all nodes
 - `POST#_caje/populate` Checks the manifest for any pages that are not cached locally, and caches them to the File System
+
+- `GET#_caje/auth` Displays the Admin Login Page
+- `POST#_caje/auth` Login to the Admin Dashboard
 
 ## Acknowledgements
 
