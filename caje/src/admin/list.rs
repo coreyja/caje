@@ -9,7 +9,12 @@ use sqlx::SqlitePool;
 
 use crate::{get_policy_from_cache, CACHE_DIR};
 
-pub async fn route(State(db_pool): State<SqlitePool>) -> Result<impl IntoResponse, String> {
+use super::auth::DBSession;
+
+pub(crate) async fn route(
+    State(db_pool): State<SqlitePool>,
+    _: DBSession,
+) -> Result<impl IntoResponse, String> {
     let file_system_entries: Result<Vec<Metadata>, _> =
         tokio::task::spawn_blocking(move || cacache::list_sync(CACHE_DIR).collect())
             .await

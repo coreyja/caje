@@ -34,3 +34,4 @@ tower-cookies = { version = "0.9.0", features = ["private", "signed"] }
 base64 = "0.21.5"
 debug-ignore = "1.0.5"
 uuid = { version = "1.5.0", features = ["v4"] }
+async-trait = "0.1.74"
