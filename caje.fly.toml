@@ -22,3 +22,4 @@ destination = "/data"
 
 [env]
 DATABASE_PATH = "/litefs/caje.db"
+LITEFS = "true"
