@@ -1,26 +1,26 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT method, url FROM Pages",
+  "query": "SELECT * FROM sessions WHERE session_id = $1",
   "describe": {
     "columns": [
       {
-        "name": "method",
+        "name": "id",
         "ordinal": 0,
-        "type_info": "Text"
+        "type_info": "Int64"
       },
       {
-        "name": "url",
+        "name": "session_id",
         "ordinal": 1,
         "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 0
+      "Right": 1
     },
     "nullable": [
       false,
       false
     ]
   },
-  "hash": "9476683a8128884221a6ec2803845d40613e9527969584fd1eaced7cc4a1a60b"
+  "hash": "640a3e4131ebb0a00146b2b7bd7dff1f4a2318e474f5b495b9aae7f0a1902a27"
 }
