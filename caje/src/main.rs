@@ -284,10 +284,18 @@ async fn get_potentially_cached_response(
     let bytes = hyper::body::to_bytes(request.into_body())
         .await
         .map_err(|_| miette!("Could not get bytes from body"))?;
+
+    // The incoming Host is PROXY_FROM_DOMAIN; the origin is PROXY_ORIGIN_DOMAIN.
+    // Forwarding it makes `host` disagree with `:authority` over HTTP/2, which
+    // Fly's edge rejects with 421 Misdirected Request. reqwest sets Host from
+    // the URL when we don't.
+    let mut origin_request_headers = headers.clone();
+    origin_request_headers.remove(http::header::HOST);
+
     let client = reqwest::Client::new();
     let origin_response = client
         .request(method.clone(), proxy_url.to_string())
-        .headers(headers.clone())
+        .headers(origin_request_headers)
         .body(bytes.clone())
         .send()
         .await
