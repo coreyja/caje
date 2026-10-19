@@ -22,7 +22,7 @@ use tracing::{error, info};
 pub mod admin;
 
 const PROXY_FROM_DOMAIN: &str = "slow.coreyja.com";
-const PROXY_ORIGIN_DOMAIN: &str = "slow-server.fly.dev";
+const PROXY_ORIGIN_DOMAIN: &str = "slow-server.attic.coreyja.cloud";
 
 #[derive(Debug, Clone)]
 struct AppState {
